@@ -1,191 +1,184 @@
 # JIG code from Stand-up Maths video "Why don't Jigsaw Puzzles have the correct number of pieces?"
+from dataclasses import dataclass
+
+# percentage we'll check in either direction
+THRESHOLD = 0.1
+
+# the extra badness per piece
+PENALTY = 1.005
+
+
+@dataclass
+class ResultDetails:
+    num_pieces: int = 0
+    sides: tuple = (0, 0)
+    ratio: float = 0
+    piece_ratio: float = 0
+    badness_score: float = 100
+
 
 def low_factors(n):
     # all the factors which are the lower half of each factor pair
-    lf = []
-    for i in range(1, int(n**0.5)+1):
-        if n % i == 0:
-            lf.append(i)
-    return lf
+    return [i for i in range(1, int(n ** 0.5) + 1) if n % i == 0]
 
 
-def jig(w,h,n,b=0):
-    
-    # percentage we'll check in either direction
-    threshold = 0.1
+def switched_ratio(width, height):
+    return max(width, height) / min(width, height)  # switched to be greater than 1
 
-    # the extra badness per piece
-    penalty = 1.005
 
-    ratio = max(w,h)/min(w,h)   # switched to be greater than 1
-    
-    print("")
-    print(f"{w} by {h} is picture ratio {round(ratio,4)}")
-    print("")
-    
-    max_cap = int((1+threshold)*n)
-    min_cap = int((1-threshold)*n)
+def jig_v1(width, height, num_pieces, debug=False):
+    ratio = switched_ratio(width, height)
 
-    up_range = [i for i in range(n,max_cap+1)]
-    down_range = [i for i in range(min_cap,n)]  # do not want n included again
+    print(f"\n{width} by {height} is picture ratio {round(ratio, 4)}\n")
+
+    max_cap = int((1 + THRESHOLD) * num_pieces)
+    min_cap = int((1 - THRESHOLD) * num_pieces)
+
+    up_range = [i for i in range(num_pieces, max_cap + 1)]
+    down_range = [i for i in range(min_cap, num_pieces)]  # do not want n included again
     down_range.reverse()
 
     # start at 100 which is silly high and then move down.
-    up_best = 100
-    up_best_deets = []
-    down_best = 100
-    down_best_deets = []
+    up_best, down_best = ResultDetails(), ResultDetails()
+
+    # I am using the run marker so I know if looking above or below n
+    for run, this_range in enumerate((up_range, down_range)):
+        best = ResultDetails()
+
+        if run == 0:
+            print(f"Looking for >= {num_pieces} solutions:\n")
+        else:
+            print("\nJust out of interest, here are smaller options:\n")
+
+        for pieces in this_range:
+            best_ratio = 0
+            best_sides = (0, 0)
+            for side1 in low_factors(pieces):
+                side2 = int(pieces / side1)  # must be a whole number anyway
+                this_ratio = side2 / side1
+
+                if best_ratio == 0:
+                    best_ratio = this_ratio
+                    best_sides = (side1, side2)
+                else:
+                    if abs(this_ratio / ratio - 1) < abs(best_ratio / ratio - 1):
+                        best_ratio = this_ratio
+                        best_sides = (side1, side2)
+
+            is_better = False
+            if best.num_pieces == 0:
+                is_better = True
+            else:
+                if abs(best_ratio / ratio - 1) < abs(best.ratio / ratio - 1):
+                    is_better = True
+
+            if is_better:
+                piece_ratio = (max(ratio, best_ratio) / min(ratio, best_ratio))
+                badness_score = (PENALTY ** (abs(pieces - num_pieces))) * piece_ratio
+
+                best = ResultDetails(pieces, best_sides, best_ratio, piece_ratio, badness_score)
+
+                if run == 0:
+                    if best.badness_score < up_best.badness_score:
+                        up_best = best
+                else:
+                    if best.badness_score < down_best.badness_score:
+                        down_best = best
+
+                print(f"{best.num_pieces} pieces in {best.sides} (grid ratio {round(best.ratio, 4)}) "
+                      f"needs piece ratio {round(best.piece_ratio, 4)}")
+                if debug:
+                    print(f"[badness = {round(best.badness_score, 5)}]")
+
+        print(f"for {num_pieces} the best is {best.num_pieces} pieces with size {best.sides}")
+
+    print(f"\nIf I had to guess: I think it's {up_best.num_pieces} pieces.")
+
+    if down_best.badness_score < up_best.badness_score:
+        print(f"\nBUT, fun fact, {down_best.num_pieces} would be even better.")
+
+    print()
+    return 'DONE'
+
+
+# I duplicated jig_v0 to make is easier to show in the video
+def jig_v0(width, height, num_pieces, debug=False):
+    ratio = switched_ratio(width, height)
+
+    print(f"\n{width} by {height} is picture ratio {round(ratio, 4)}\n")
+
+    max_cap = int((1 + THRESHOLD) * num_pieces)
+    min_cap = int((1 - THRESHOLD) * num_pieces)
+
+    up_range = [i for i in range(num_pieces, max_cap + 1)]
+    down_range = [i for i in range(min_cap, num_pieces)]  # do not want n included again
+    down_range.reverse()
+
+    # start at 100 which is silly high and then move down.
+    up_best, down_best = ResultDetails(), ResultDetails()
 
     # I am using the run marker so I know if looking above or below n
     run = 0
 
-    for dis_range in [up_range,down_range]:
-        best_n = 0
-        best_n_ratio = 0
-        best_n_sides = []
-        
-        if run == 0:
-            print(f"Looking for >= {n} solutions:")
-            print("")
-        else:
-            print("")
-            print("Just out of interest, here are smaller options:")
-            print("")
-        
-        for i in dis_range:
-            this_best = 0
-            for j in low_factors(i):
-                j2 = int(i/j)   # must be a whole number anyway
-                this_ratio = j2/j
-                if this_best == 0:
-                    this_best =  this_ratio
-                    best_sides = [j,j2]
-                else:
-                    if abs(this_ratio/ratio - 1) < abs(this_best/ratio - 1):
-                        this_best = this_ratio
-                        best_sides = [j,j2]
-            yes = 0
-            if best_n == 0:
-                yes = 1
-            else:
-                if abs(this_best/ratio - 1) < abs(best_n_ratio/ratio - 1):
-                    yes = 1
-            if yes == 1:
-                best_n = i
-                best_n_ratio = this_best
-                best_n_sides = best_sides
-                piece_ratio = max(ratio,this_best)/min(ratio,this_best)
-                badness_score = (penalty**(abs(i-n)))*piece_ratio
-                if run == 0:
-                    if badness_score < up_best:
-                        up_best = badness_score
-                        up_best_deets = [best_n,best_n_sides,best_n_ratio]
-                else:
-                    if badness_score < down_best:
-                        down_best = badness_score
-                        down_best_deets = [best_n,best_n_sides,best_n_ratio]
-                print(f"{best_n} pieces in {best_n_sides} (grid ratio {round(best_n_ratio,4)}) needs piece ratio {round(piece_ratio,4)}")
-                if b==1:
-                    print(f"[badness = {round(badness_score,5)}]")
-                
-
-        print(f"for {n} the best is {best_n} pieces with size {best_n_sides}")
-        
-        run += 1
-    print("")
-    print(f"If I had to guess: I think it's {up_best_deets[0]} pieces.")
-
-    if down_best < up_best:
-        print("")
-        print(f"BUT, fun fact, {down_best_deets[0]} would be even better.")
-
-    print("")
-    return 'DONE'
-
-# I duplicated jig_v0 to make is easier to show in the video
-def jig_v0(w,h,n,b=0):
-    
-    # percentage we'll check in either direction
-    threshold = 0.1
-
-    penalty = 1.005
-
-    ratio = max(w,h)/min(w,h)   # switched to be greater than 1
-    
-    print("")
-    print(f"{w} by {h} is picture ratio {round(ratio,4)}")
-    print("")
-    
-    max_cap = int((1+threshold)*n)
-    min_cap = int((1-threshold)*n)
-
-    up_range = [i for i in range(n,max_cap+1)]
-    down_range = [i for i in range(min_cap,n)]  # do not want n included again
-    down_range.reverse()
-
-    # start at 100 which is silly high and then move down.
-    up_best = 100
-    up_best_deets = []
-    down_best = 100
-    down_best_deets = []
-
-    run = 0
-
-    for dis_range in [up_range,down_range]:
-        best_n = 0
-        best_n_ratio = 0
-        best_n_sides = []
+    for this_range in (up_range, down_range):
+        best = ResultDetails()
 
         if run == 0:
-            print(f"Looking for >= {n} solutions:")
-            print("")
+            print(f"Looking for >= {num_pieces} solutions:\n")
         else:
-            print("")
-            print("Just out of interest, here are smaller options:")
-            print("")
-        
-        for i in dis_range:
-            this_best = 0
-            for j in low_factors(i):
-                j2 = int(i/j)   # must be a whole number anyway
-                this_ratio = j2/j
-                if this_best == 0:
-                    this_best =  this_ratio
-                    best_sides = [j,j2]
-                else:
-                    if abs(this_ratio/ratio - 1) < abs(this_best/ratio - 1):
-                        this_best = this_ratio
-                        best_sides = [j,j2]
-            yes = 0
-            if best_n == 0:
-                yes = 1
-            else:
-                if abs(this_best/ratio - 1) < abs(best_n_ratio/ratio - 1):
-                    yes = 1
-            if yes == 1:
-                best_n = i
-                best_n_ratio = this_best
-                best_n_sides = best_sides
-                piece_ratio = max(ratio,this_best)/min(ratio,this_best)
-                badness_score = (penalty**(abs(i-n)))*piece_ratio
-                if run == 0:
-                    if badness_score < up_best:
-                        up_best = badness_score
-                        up_best_deets = [best_n,best_n_sides,best_n_ratio]
-                else:
-                    if badness_score < down_best:
-                        down_best = badness_score
-                        down_best_deets = [best_n,best_n_sides,best_n_ratio]
-                print(f"{best_n} pieces in {best_n_sides} (grid ratio {round(best_n_ratio,4)}) needs piece ratio {round(piece_ratio,4)}")
-                if b==1:
-                    print(f"[badness = {round(badness_score,5)}]")
-                
+            print("\nJust out of interest, here are smaller options:\n")
 
-        
+        for pieces in this_range:
+            best_ratio = 0
+            best_sides = (0, 0)
+            for side1 in low_factors(pieces):
+                side2 = int(pieces / side1)  # must be a whole number anyway
+                this_ratio = side2 / side1
+                if best_ratio == 0:
+                    best_ratio = this_ratio
+                    best_sides = (side1, side2)
+                else:
+                    if abs(this_ratio / ratio - 1) < abs(best_ratio / ratio - 1):
+                        best_ratio = this_ratio
+                        best_sides = (side1, side2)
+
+            is_better = False
+            if best.num_pieces == 0:
+                is_better = True
+            else:
+                if abs(best_ratio / ratio - 1) < abs(best.ratio / ratio - 1):
+                    is_better = True
+            if is_better:
+                piece_ratio = (max(ratio, best_ratio) / min(ratio, best_ratio))
+                badness_score = (PENALTY ** (abs(pieces - num_pieces))) * piece_ratio
+
+                best = ResultDetails(pieces, best_sides, best_ratio, piece_ratio, badness_score)
+
+                if run == 0:
+                    if best.badness_score < up_best.badness_score:
+                        up_best = best
+                else:
+                    if best.badness_score < down_best.badness_score:
+                        down_best = best
+                print(f"{best.num_pieces} pieces in {best.sides} (grid ratio {round(best.ratio, 4)}) "
+                      f"needs piece ratio {round(best.piece_ratio, 4)}")
+                if debug:
+                    print(f"[badness = {round(best.badness_score, 5)}]")
+
         run += 1
 
-
-    print("")
+    print()
     return 'DONE'
 
 
+def jig(width, height, num_pieces, debug=False, version=1):
+    if version == 0:
+        return jig_v0(width, height, num_pieces, debug)
+    elif version == 1:
+        return jig_v1(width, height, num_pieces, debug)
+    else:
+        return 0
+
+
+if __name__ == '__main__':
+    print(f'Example: {jig(33, 22.8, 1000, debug=True, version=1) = }')
